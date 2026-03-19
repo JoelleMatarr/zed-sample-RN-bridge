@@ -1,0 +1,42 @@
+{
+  "originHash" : "2ec63847507796054d21f7a624242b3bedd082e77eba63b5cb530e44adfe6f0e",
+  "pins" : [
+    {
+      "identity" : "checkout-event-logger-ios-framework",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/checkout/checkout-event-logger-ios-framework.git",
+      "state" : {
+        "revision" : "a914d754b4ffb1843730e8e1f8e7e60c4bf81cf9",
+        "version" : "1.2.4"
+      }
+    },
+    {
+      "identity" : "checkout-ios-components",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/checkout/checkout-ios-components",
+      "state" : {
+        "revision" : "30be5edac9fbe61b9719ab7ef98f93a4b543a9dd",
+        "version" : "1.6.1"
+      }
+    },
+    {
+      "identity" : "checkout-risk-sdk-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/checkout/checkout-risk-sdk-ios",
+      "state" : {
+        "revision" : "7f944921720dc879b63ac3bb51f56dd6eb50919c",
+        "version" : "4.0.2"
+      }
+    },
+    {
+      "identity" : "fingerprintjs-pro-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/fingerprintjs/fingerprintjs-pro-ios",
+      "state" : {
+        "revision" : "21bcfcfd2e1bce943f668a7748f8a7e1154f0ac2",
+        "version" : "2.13.0"
+      }
+    }
+  ],
+  "version" : 3
+}

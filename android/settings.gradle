@@ -1,0 +1,23 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral() // Ensure this is included
+        includeBuild("../node_modules/@react-native/gradle-plugin")
+    }
+}
+plugins {
+    id("com.facebook.react.settings")
+}
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex -> ex.autolinkLibrariesFromCommand() }
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral() // Ensure this is included
+        maven { url = uri("https://jitpack.io") }
+        maven { url = uri("https://maven.fpregistry.io/releases") }
+    }
+}
+rootProject.name = 'DemoFlowApp'
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')
+
