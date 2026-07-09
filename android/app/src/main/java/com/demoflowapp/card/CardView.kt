@@ -2,6 +2,9 @@ package com.demoflowapp.card
 
 import android.content.Context
 import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.text.font.Font
@@ -17,6 +20,7 @@ import com.checkout.components.interfaces.component.CheckoutComponentConfigurati
 import com.checkout.components.interfaces.component.ComponentCallback
 import com.checkout.components.interfaces.component.ComponentOption
 import com.checkout.components.interfaces.component.ComponentOptions
+import com.checkout.components.interfaces.localisation.Locale
 import com.checkout.components.interfaces.model.CardholderNamePosition
 import com.checkout.components.interfaces.model.PaymentMethodName
 import com.checkout.components.interfaces.model.PaymentSessionResponse
@@ -57,6 +61,18 @@ class CardView(context: Context, private val reactApplicationContext: ReactAppli
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit(eventName, eventData)
     }
+
+//    private fun forceLtrOnInputs(view: View) {
+//        if (view is EditText) {
+//            // This forces the text engine to read LTR, fixing the "29 / 05" Bidi bug
+//            view.textDirection = View.TEXT_DIRECTION_LTR
+//        } else if (view is ViewGroup) {
+//            // Recursively search through all nested layouts
+//            for (i in 0 until view.childCount) {
+//                forceLtrOnInputs(view.getChildAt(i))
+//            }
+//        }
+//    }
 
     fun initialize(paymentSessionID: String, paymentSessionSecret: String, publicKey: String) {
         if (hasInitialized) return
@@ -138,13 +154,14 @@ class CardView(context: Context, private val reactApplicationContext: ReactAppli
             paymentSession = PaymentSessionResponse(id = paymentSessionID, secret = paymentSessionSecret),
             componentCallback = customComponentCallback,
             publicKey = publicKey,
+            locale = Locale.Ar,
             appearance = designTokens,
             environment = environment
         )
 
         val componentOptions = ComponentOption(
             cardConfiguration = CardConfiguration(
-                displayCardholderName = CardholderNamePosition.BOTTOM,
+                displayCardholderName = CardholderNamePosition.TOP,
             ),
         )
 
@@ -155,6 +172,11 @@ class CardView(context: Context, private val reactApplicationContext: ReactAppli
                 checkoutComponents = CheckoutComponentsFactory(config = configuration).create()
                 val cardComponent = checkoutComponents!!.create(PaymentMethodName.Card, componentOptions)
                 val view = cardComponent.provideView(this@CardView)
+
+                this@CardView.layoutDirection = View.LAYOUT_DIRECTION_LTR
+                view.layoutDirection = View.LAYOUT_DIRECTION_LTR
+
+//                forceLtrOnInputs(view)
 
                 view.setViewTreeLifecycleOwner(activity)
                 view.setViewTreeViewModelStoreOwner(activity)

@@ -4,7 +4,7 @@ import { requireNativeComponent, ViewProps, Platform, View, NativeEventEmitter, 
 export interface SessionData {
   id: string;
   secret: string;
-  sessionData?: string; // Raw session data from SDK
+  sessionData?: string; 
 }
 
 export interface ApiCallResult {
@@ -19,10 +19,16 @@ export interface CardViewProps extends ViewProps {
   paymentSessionToken?: string;
   paymentSessionSecret?: string;
   publicKey?: string;
+  // When false, the SDK hides its built-in pay button so submission can be
+  // driven from an external button via the native submit() bridge.
+  showPayButton?: boolean;
   handleSubmit?: (sessionData: SessionData) => Promise<ApiCallResult>;
   hasHandleSubmitListener?: boolean;
   onPaymentSuccess?: (event: { nativeEvent: { component: string; paymentId: string } }) => void;
   onPaymentError?: (event: { nativeEvent: { component: string; errorMessage: string; errorCode: string } }) => void;
+  
+  // Added: Height calculation callback definition
+  onHeightChange?: (event: { nativeEvent: { height: number } }) => void;
 }
 
 const { CardModule } = NativeModules;
@@ -32,8 +38,6 @@ const APPLE_PAY_HANDLE_SUBMIT_EVENT = 'onHandleSubmit';
 
 const ANDROID_VIEW_NAME = 'RNCardView';
 const IOS_VIEW_NAME = 'CardViewIOS';
-
-
 
 const NativeCardViewAndroid: any = Platform.OS === 'android' ? requireNativeComponent(ANDROID_VIEW_NAME) : null;
 const NativeCardViewIOS: any = Platform.OS === 'ios' ? requireNativeComponent(IOS_VIEW_NAME) : null;

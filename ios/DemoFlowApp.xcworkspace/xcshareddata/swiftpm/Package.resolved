@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/checkout/checkout-ios-components",
       "state" : {
-        "revision" : "30be5edac9fbe61b9719ab7ef98f93a4b543a9dd",
-        "version" : "1.6.1"
+        "revision" : "9e5c35a872936e35684c38b131a9bf368a10fc4e",
+        "version" : "2.1.0"
       }
     },
     {
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/fingerprintjs/fingerprintjs-pro-ios",
       "state" : {
-        "revision" : "21bcfcfd2e1bce943f668a7748f8a7e1154f0ac2",
-        "version" : "2.13.0"
+        "revision" : "e44691d7c7efff41c908ed76a69f174439fd6011",
+        "version" : "2.17.0"
       }
     }
   ],

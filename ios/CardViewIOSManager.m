@@ -9,5 +9,8 @@ RCT_EXPORT_VIEW_PROPERTY(publicKey, NSString)
 RCT_EXPORT_VIEW_PROPERTY(environment, NSString)
 RCT_EXPORT_VIEW_PROPERTY(hasHandleSubmitListener, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(paymentMethod, NSString)
+RCT_EXPORT_VIEW_PROPERTY(showPayButton, BOOL)
+
+RCT_EXPORT_VIEW_PROPERTY(onHeightChange, RCTBubblingEventBlock)
 
 @end

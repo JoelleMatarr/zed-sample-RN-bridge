@@ -36006,7 +36006,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 46EB2E0001AFC0 /* fmt.release.xcconfig */;
 			buildSettings = {
-				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
@@ -36045,7 +36045,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 46EB2E0001AFB0 /* fmt.debug.xcconfig */;
 			buildSettings = {
-				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";

@@ -783,7 +783,7 @@
 			repositoryURL = "https://github.com/checkout/checkout-ios-components";
 			requirement = {
 				kind = exactVersion;
-				version = 1.6.1;
+				version = 2.1.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
