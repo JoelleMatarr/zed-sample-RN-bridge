@@ -19,8 +19,8 @@ import {
 import CardView from './CardView';
 
 const { ApplePayModule, CardModule } = NativeModules;
-const PUBLIC_KEY = ENV.PUBLIC_KEY;
-const SECRET_KEY = ENV.SECRET_KEY; 
+const PUBLIC_KEY = ENV.PUBLIC_KEY; // Ensure this is set in your environment variables
+const SECRET_KEY = ENV.SECRET_KEY; // Ensure this is set in your environment variables
 const API_BASE_URL = 'https://api.sandbox.checkout.com';
 
 // Setup explicit viewport measurements
@@ -71,8 +71,10 @@ const App = () => {
 
     let submitSub: any;
     if (Platform.OS === 'android') {
+      // Match iOS: when the SDK's Pay button is tapped, show a processing state and
+      // keep the sheet open. It closes on onFlowPaymentSuccess (or re-enables on error).
       submitSub = emitter.addListener('onCardSubmitted', () => {
-        setModalVisible(false);
+        setIsSubmitting(true);
       });
     }
 
@@ -293,6 +295,15 @@ const App = () => {
                 )}
               </TouchableOpacity>
             )}
+
+            {/* Android: the SDK renders its own Pay button, so we surface the
+                processing state with an overlay instead of closing the sheet. */}
+            {Platform.OS === 'android' && isSubmitting && (
+              <View style={styles.processingOverlay}>
+                <ActivityIndicator size="large" color="#FF6B6B" />
+                <Text style={styles.processingText}>Processing…</Text>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -444,6 +455,20 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: '#727272',
     fontSize: 14,
+  },
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+  },
+  processingText: {
+    marginTop: 16,
+    color: '#00083D',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

@@ -33,6 +33,7 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.uimanager.events.RCTEventEmitter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,16 +44,92 @@ class CardView(context: Context, private val reactApplicationContext: ReactAppli
     var environment: Environment = Environment.SANDBOX
     var hasHandleSubmitListener: Boolean = false
 
+    // The SDK card component's view, once mounted. Its content height changes as
+    // the form grows/shrinks (e.g. inline validation errors) and we report those
+    // changes to JS via onHeightChange so the bottom sheet can hug the card.
+    private var contentView: View? = null
+    // Last height reported to JS, in dp, so we can de-duplicate noisy layout passes.
+    private var lastReportedHeightDp = 0.0
+
+    // RN doesn't re-lay-out native children on its own after the SDK's async Compose
+    // content changes, so we drive the measure/layout pass ourselves. We also measure
+    // the child directly for reporting: when the form changed height internally (e.g.
+    // the built-in "Remember me" toggle), Compose has flagged the child for layout, so
+    // this returns the fresh content height even when our own measure is cached. That
+    // is what lets the sheet track EVERY toggle (unlimited) rather than stopping after
+    // a couple — without forcing a full re-layout that would ghost the SDK's text.
     private val mLayoutRunnable = Runnable {
         if (!isAttachedToWindow) return@Runnable
         measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
         layout(left, top, right, bottom)
+
+        val child = contentView
+        if (child != null && width > 0) {
+            val cw = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
+            child.measure(cw, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            reportContentHeightPx(child.measuredHeight)
+        }
     }
 
     override fun requestLayout() {
         super.requestLayout()
+        removeCallbacks(mLayoutRunnable)
         post(mLayoutRunnable)
+    }
+
+    // Measure and lay out the SDK view at its TRUE content height so the bottom sheet
+    // hugs it and grows/shrinks with its content. The Checkout SDK renders the card
+    // into a ComposeView whose root uses fillMaxHeight, so under the bounded frame RN
+    // imposes it just fills that frame. Measuring it UNSPECIFIED defeats fillMaxHeight
+    // (it can't expand into infinite space) so it collapses to its true content
+    // height, which we forward to JS. onLayout places it at that height so measure and
+    // layout agree.
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val child = contentView
+        if (child == null) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            return
+        }
+        val w = MeasureSpec.getSize(widthMeasureSpec)
+        if (w <= 0) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            return
+        }
+        val childWidthSpec = MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY)
+        val childHeightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        child.measure(childWidthSpec, childHeightSpec)
+        val contentPx = child.measuredHeight
+        val h = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) {
+            MeasureSpec.getSize(heightMeasureSpec)
+        } else {
+            contentPx
+        }
+        setMeasuredDimension(w, h)
+        reportContentHeightPx(contentPx)
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val child = contentView ?: return
+        child.layout(0, 0, r - l, child.measuredHeight)
+    }
+
+    private fun reportContentHeightPx(contentPx: Int) {
+        // Needs a valid react tag to route the per-view event.
+        if (contentPx <= 0 || id <= 0) return
+
+        // React Native lays out in density-independent pixels, so convert from px.
+        val density = resources.displayMetrics.density
+        val heightDp = contentPx / density.toDouble()
+
+        // Ignore sub-dp noise so we don't spam the bridge or jitter the sheet.
+        if (Math.abs(heightDp - lastReportedHeightDp) < 1.0) return
+        lastReportedHeightDp = heightDp
+
+        val params = Arguments.createMap().apply { putDouble("height", heightDp) }
+        reactApplicationContext
+            .getJSModule(RCTEventEmitter::class.java)
+            .receiveEvent(id, "onHeightChange", params)
     }
 
     private fun sendEvent(eventName: String, params: WritableMap?) {
@@ -154,7 +231,7 @@ class CardView(context: Context, private val reactApplicationContext: ReactAppli
             paymentSession = PaymentSessionResponse(id = paymentSessionID, secret = paymentSessionSecret),
             componentCallback = customComponentCallback,
             publicKey = publicKey,
-            locale = Locale.Ar,
+            locale = Locale.En,
             appearance = designTokens,
             environment = environment
         )
@@ -183,8 +260,21 @@ class CardView(context: Context, private val reactApplicationContext: ReactAppli
                 view.setViewTreeSavedStateRegistryOwner(activity)
 
                 removeAllViews()
-                addView(view)
+                // WRAP_CONTENT so the SDK view takes its natural content height,
+                // which we then report to JS (see onMeasure / reportContentHeightPx).
+                addView(
+                    view,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
+                )
+                contentView = view
+
                 view.requestLayout()
+                // Trigger a measure pass so onMeasure reports the initial content
+                // height; subsequent form growth/shrink re-triggers onMeasure too.
+                requestLayout()
             } catch (e: Exception) {
                 Log.e("CardView", "Error: ${e.message}")
             }

@@ -21,7 +21,11 @@ class CardViewManager : SimpleViewManager<CardView>() {
         return mutableMapOf(
             "onCardSubmitted" to mutableMapOf("registrationName" to "onCardSubmitted"),
             "onFlowPaymentSuccess" to mutableMapOf("registrationName" to "onFlowPaymentSuccess"),
-            "onFlowPaymentError" to mutableMapOf("registrationName" to "onFlowPaymentError")
+            "onFlowPaymentError" to mutableMapOf("registrationName" to "onFlowPaymentError"),
+            // Per-view direct event so the <CardView onHeightChange={...}/> prop fires.
+            // Mirrors the iOS CardPayView.onHeightChange bridge so the bottom sheet
+            // can track the card's content height on both platforms.
+            "onHeightChange" to mutableMapOf("registrationName" to "onHeightChange")
         )
     }
 
