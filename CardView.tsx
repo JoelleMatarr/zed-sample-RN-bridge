@@ -22,6 +22,8 @@ export interface CardViewProps extends ViewProps {
   // When false, the SDK hides its built-in pay button so submission can be
   // driven from an external button via the native submit() bridge.
   showPayButton?: boolean;
+  // Which Flow component to render. 'tamara' is iOS-only for now.
+  paymentMethod?: 'card' | 'tamara';
   handleSubmit?: (sessionData: SessionData) => Promise<ApiCallResult>;
   hasHandleSubmitListener?: boolean;
   onPaymentSuccess?: (event: { nativeEvent: { component: string; paymentId: string } }) => void;
@@ -127,7 +129,7 @@ export const CardView: React.FC<CardViewProps> = (props) => {
     return (
       <NativeCardViewIOS
         {...otherProps}
-        paymentMethod="card"
+        paymentMethod={props.paymentMethod ?? 'card'}
         hasHandleSubmitListener={!!handleSubmit}
       />
     );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -19,8 +19,8 @@ import {
 import CardView from './CardView';
 
 const { ApplePayModule, CardModule } = NativeModules;
-const PUBLIC_KEY = ENV.PUBLIC_KEY; // Ensure this is set in your environment variables
-const SECRET_KEY = ENV.SECRET_KEY; // Ensure this is set in your environment variables
+const PUBLIC_KEY = ENV.PUBLIC_KEY; // Replace with your actual public key or use environment variables
+const SECRET_KEY = ENV.SECRET_KEY; // Replace with your actual secret key or use environment variables
 const API_BASE_URL = 'https://api.sandbox.checkout.com';
 
 // Setup explicit viewport measurements
@@ -43,17 +43,63 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-interface CapturedCard {
-  last4: string;
-  scheme: string;
-  expiryMonth: number;
-  expiryYear: number;
+// A completed payment, from either the bottom sheet or the inline components.
+// Card payments carry card details; Tamara payments only have a status.
+interface CompletedPayment {
+  method: 'card' | 'tamara';
+  status: string;
+  last4?: string;
+  scheme?: string;
+  expiryMonth?: number;
+  expiryYear?: number;
 }
+
+type InlineMethod = 'card' | 'tamara';
+
+// Tamara is only wired natively on iOS (CardPayView); Android shows Card only.
+const INLINE_METHODS: InlineMethod[] = Platform.OS === 'ios' ? ['card', 'tamara'] : ['card'];
+
+// Creates a fresh Flow payment session. Each component mount gets its own
+// session so switching methods never reuses a session another method touched.
+const createPaymentSession = async (): Promise<{ id: string; secret: string } | null> => {
+  const response = await fetch(`${API_BASE_URL}/payment-sessions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      amount: 25000,
+      currency: 'SAR',
+      reference: `REF-${Date.now()}`,
+      description: 'Test payment session for React Native SDK',
+      processing_channel_id: 'pc_ticd6t2rrmnujacakafvukhbwu',
+      billing: { address: { address_line1: "123 Main St", city: "Riyadh", zip: "12345", country: 'SA' }, phone: { country_code: "966", number: "551234567" } },
+      shipping: { address: { address_line1: "123 Main St", city: "Riyadh", zip: "12345", country: 'SA' }, phone: { country_code: "966", number: "551234567" } },
+      customer: { name: "joelle matar",email: "naveed@yopmail.com", phone: { country_code: "966", number: "551234567" } },
+      "3ds": { enabled: true },
+      success_url: 'https://example.com/success',
+      failure_url: 'https://example.com/failure',
+      payment_method_configuration: { card: { store_payment_details: "enabled" } },
+      "items": [
+        {
+          "name": "Test item",
+          "quantity": 1,
+          "unit_price": 25000,
+          "reference": "858818ac"
+        }
+      ],
+    }),
+  });
+
+  const data = await response.json();
+  return data.id ? { id: data.id, secret: data.payment_session_secret } : null;
+};
 
 const App = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
-  
+
   // Track precise form pixels received via bridge events
   const [sheetHeight, setSheetHeight] = useState<number | null>(null);
 
@@ -61,7 +107,20 @@ const App = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [session, setSession] = useState({ id: '', secret: '' });
-  const [capturedCard, setCapturedCard] = useState<CapturedCard | null>(null);
+  const [completedPayment, setCompletedPayment] = useState<CompletedPayment | null>(null);
+
+  // Inline (on-screen) components: only one of Card / Tamara is mounted at a time.
+  const [inlineMethod, setInlineMethod] = useState<InlineMethod | null>(null);
+  const [inlineSession, setInlineSession] = useState<{ id: string; secret: string } | null>(null);
+  const [inlineHeight, setInlineHeight] = useState<number | null>(null);
+  const [isInlineSubmitting, setIsInlineSubmitting] = useState(false);
+  // Guards against a slow session response for a method the user already switched away from.
+  const inlineRequestRef = useRef(0);
+  const isInlineSessionLoadingRef = useRef(false);
+
+  // Native events are global, so the listeners use this to tell sheet from inline.
+  const modalVisibleRef = useRef(false);
+  modalVisibleRef.current = modalVisible;
 
   useEffect(() => {
     const module = Platform.OS === 'ios' ? ApplePayModule : CardModule;
@@ -74,18 +133,27 @@ const App = () => {
       // Match iOS: when the SDK's Pay button is tapped, show a processing state and
       // keep the sheet open. It closes on onFlowPaymentSuccess (or re-enables on error).
       submitSub = emitter.addListener('onCardSubmitted', () => {
-        setIsSubmitting(true);
+        if (modalVisibleRef.current) {
+          setIsSubmitting(true);
+        } else {
+          setIsInlineSubmitting(true);
+        }
       });
     }
 
     const successSub = emitter.addListener('onFlowPaymentSuccess', async (event) => {
       setIsSubmitting(false);
       setModalVisible(false);
-      await verifyAndFetchCardDetails(event.paymentId);
+      setIsInlineSubmitting(false);
+      // Unmount the inline component: its payment session is now used.
+      setInlineMethod(null);
+      setInlineSession(null);
+      await verifyAndFetchPaymentDetails(event.paymentId);
     });
 
     const errorSub = emitter.addListener('onFlowPaymentError', (event) => {
       setIsSubmitting(false);
+      setIsInlineSubmitting(false);
       console.warn('[App] Flow payment error:', event?.errorMessage);
     });
 
@@ -96,7 +164,7 @@ const App = () => {
     };
   }, []);
 
-  const verifyAndFetchCardDetails = async (paymentId: string) => {
+  const verifyAndFetchPaymentDetails = async (paymentId: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/payments/${paymentId}`, {
         method: 'GET',
@@ -106,13 +174,19 @@ const App = () => {
         },
       });
       const data = await response.json();
-      if (data.status === 'Captured' || data.status === 'Authorized') {
-        setCapturedCard({
-          last4: data.source.last4,
-          scheme: data.source.scheme,
-          expiryMonth: data.source.expiry_month,
-          expiryYear: data.source.expiry_year,
-        });
+      if (data.source?.type === 'card') {
+        if (data.status === 'Captured' || data.status === 'Authorized') {
+          setCompletedPayment({
+            method: 'card',
+            status: data.status,
+            last4: data.source.last4,
+            scheme: data.source.scheme,
+            expiryMonth: data.source.expiry_month,
+            expiryYear: data.source.expiry_year,
+          });
+        }
+      } else if (data.status) {
+        setCompletedPayment({ method: 'tamara', status: data.status });
       }
     } catch (error) {
       console.error('[App] Failed to fetch payment details:', error);
@@ -125,29 +199,15 @@ const App = () => {
     setSheetHeight(null); // Clear out historical measurements for the fresh mounting animation
     try {
       setSession({ id: '', secret: '' });
-      const response = await fetch(`${API_BASE_URL}/payment-sessions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SECRET_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: 2500, 
-          currency: 'AED',
-          reference: `REF-${Date.now()}`,
-          processing_channel_id: 'pc_6qct6ules7be7ncuamo6wekciq',
-          billing: { address: { country: 'AE' }, phone: { country_code: "966", number: "551234567" } },
-          customer: { email: "naveed@yopmail.com", phone: { country_code: "966", number: "551234567" } },
-          "3ds": { enabled: true },
-          success_url: 'https://example.com/success',
-          failure_url: 'https://example.com/failure',
-          payment_method_configuration: { card: { store_payment_details: "enabled" } }
-        }),
-      });
-
-      const data = await response.json();
-      if (data.id) {
-        setSession({ id: data.id, secret: data.payment_session_secret });
+      const newSession = await createPaymentSession();
+      if (newSession) {
+        setSession(newSession);
+        // Only one Flow component on screen at a time: drop the inline one
+        // (and ignore any inline session request still in flight).
+        inlineRequestRef.current++;
+        isInlineSessionLoadingRef.current = false;
+        setInlineMethod(null);
+        setInlineSession(null);
         setModalVisible(true);
       } else {
         Alert.alert('Error', 'Could not create payment session');
@@ -159,6 +219,59 @@ const App = () => {
       setIsLoadingSession(false);
     }
   };
+
+  // Selecting Card or Tamara unmounts whichever inline component is showing and
+  // mounts the chosen one. All inline methods share one payment session (and, on
+  // iOS, one CheckoutComponents instance); only the component is re-created.
+  const handleSelectInlineMethod = async (method: InlineMethod) => {
+    if (method === inlineMethod) return;
+    setInlineMethod(method);
+    setInlineHeight(null);
+    setIsInlineSubmitting(false);
+    // Reuse the session if we already have one (or one is on its way).
+    if (inlineSession || isInlineSessionLoadingRef.current) return;
+
+    const requestId = ++inlineRequestRef.current;
+    isInlineSessionLoadingRef.current = true;
+    try {
+      const newSession = await createPaymentSession();
+      if (requestId !== inlineRequestRef.current) return; // superseded (e.g. sheet opened)
+      if (newSession) {
+        setInlineSession(newSession);
+      } else {
+        setInlineMethod(null);
+        Alert.alert('Error', 'Could not create payment session');
+      }
+    } catch (error) {
+      if (requestId !== inlineRequestRef.current) return;
+      console.error('[App] Inline session creation failed:', error);
+      setInlineMethod(null);
+      Alert.alert('Error', 'Network request failed');
+    } finally {
+      if (requestId === inlineRequestRef.current) isInlineSessionLoadingRef.current = false;
+    }
+  };
+
+  const handleInlineHeightChange = useCallback((event: any) => {
+    const nativeHeight = event.nativeEvent.height;
+    if (!nativeHeight || (inlineHeight !== null && Math.abs(inlineHeight - nativeHeight) < 1)) {
+      return;
+    }
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setInlineHeight(nativeHeight);
+  }, [inlineHeight]);
+
+  // iOS inline card: our Pay button drives the native component's submit().
+  const handleInlinePayPress = useCallback(async () => {
+    if (!inlineSession || isInlineSubmitting) return;
+    try {
+      setIsInlineSubmitting(true);
+      await ApplePayModule.submit(inlineSession.id);
+    } catch (error) {
+      setIsInlineSubmitting(false);
+      console.warn('[App] Inline submit request failed:', error);
+    }
+  }, [inlineSession, isInlineSubmitting]);
 
   const handleHeightChange = useCallback((event: any) => {
     const nativeHeight = event.nativeEvent.height;
@@ -206,21 +319,92 @@ const App = () => {
             <Text style={styles.methodText}> Apple Pay</Text>
           </View>
 
-          {capturedCard && (
+          {completedPayment && (
             <View style={[styles.methodItem, styles.capturedItem]}>
               <View>
-                <Text style={styles.methodText}>
-                  💳 {capturedCard.scheme.toUpperCase()} •••• {capturedCard.last4}
-                </Text>
-                <Text style={styles.subText}>
-                  Expires {capturedCard.expiryMonth}/{capturedCard.expiryYear}
-                </Text>
+                {completedPayment.method === 'card' ? (
+                  <>
+                    <Text style={styles.methodText}>
+                      💳 {completedPayment.scheme?.toUpperCase()} •••• {completedPayment.last4}
+                    </Text>
+                    <Text style={styles.subText}>
+                      Expires {completedPayment.expiryMonth}/{completedPayment.expiryYear}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.methodText}>🛍️ Tamara</Text>
+                )}
               </View>
               <View style={styles.capturedBadge}>
-                <Text style={styles.capturedBadgeText}>CAPTURED</Text>
+                <Text style={styles.capturedBadgeText}>{completedPayment.status.toUpperCase()}</Text>
               </View>
             </View>
           )}
+
+          <Text style={styles.sectionHeader}>Pay on this screen</Text>
+          {INLINE_METHODS.map((method) => {
+            const isSelected = inlineMethod === method;
+            return (
+              <View key={method}>
+                <TouchableOpacity
+                  style={[styles.methodItem, isSelected && styles.methodItemSelected]}
+                  onPress={() => handleSelectInlineMethod(method)}
+                >
+                  <Text style={styles.methodText}>
+                    {method === 'card' ? '💳 Card' : '🛍️ Tamara'}
+                  </Text>
+                  <View style={[styles.radio, isSelected && styles.radioSelected]} />
+                </TouchableOpacity>
+
+                {isSelected && (
+                  <View style={styles.inlineComponentContainer}>
+                    {inlineSession ? (
+                      <CardView
+                        // A new key per method forces a native remount, so the previous
+                        // component is torn down and the next one is created from the
+                        // same session's shared CheckoutComponents instance.
+                        key={`${method}-${inlineSession.id}`}
+                        style={[styles.nativeCard, { height: inlineHeight || 200 }]}
+                        paymentMethod={method}
+                        paymentSessionID={inlineSession.id}
+                        paymentSessionSecret={inlineSession.secret}
+                        publicKey={PUBLIC_KEY}
+                        onHeightChange={handleInlineHeightChange}
+                        // iOS card: hide the SDK button and use ours below.
+                        // Tamara: keep the SDK's own button.
+                        {...(Platform.OS === 'ios' ? { showPayButton: method === 'tamara' } : {})}
+                      />
+                    ) : (
+                      <View style={styles.inlineLoading}>
+                        <ActivityIndicator color="#FF6B6B" />
+                      </View>
+                    )}
+
+                    {Platform.OS === 'ios' && method === 'card' && inlineSession && (
+                      <TouchableOpacity
+                        style={[styles.payButton, isInlineSubmitting && styles.payButtonDisabled]}
+                        onPress={handleInlinePayPress}
+                        disabled={isInlineSubmitting}
+                      >
+                        {isInlineSubmitting ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={styles.payButtonText}>Pay</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {Platform.OS === 'android' && isInlineSubmitting && (
+                      <View style={styles.inlineProcessingOverlay}>
+                        <ActivityIndicator size="large" color="#FF6B6B" />
+                        <Text style={styles.processingText}>Processing…</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </ScrollView>
 
         <TouchableOpacity
@@ -231,7 +415,7 @@ const App = () => {
           {isLoadingSession ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.addCardButtonText}>Add card</Text>
+            <Text style={styles.addCardButtonText}>Pay with Flow (bottom sheet)</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -342,6 +526,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#00083D',
+  },
+  methodItemSelected: {
+    borderBottomColor: '#FFFFFF',
+  },
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#727272',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 28,
+    marginBottom: 4,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#999CB3',
+  },
+  radioSelected: {
+    borderColor: '#FF6B6B',
+    borderWidth: 6,
+  },
+  inlineComponentContainer: {
+    width: '100%',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F2',
+  },
+  inlineLoading: {
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inlineProcessingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   capturedItem: {
     backgroundColor: '#F9F9FB',

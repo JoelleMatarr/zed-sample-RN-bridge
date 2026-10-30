@@ -14,7 +14,9 @@
   // They will be passed down to the ViewController used by React Native.
   self.initialProps = @{};
 
-  return [super application:application didFinishLaunchingWithOptions:launchOptions];
+  BOOL result = [super application:application didFinishLaunchingWithOptions:launchOptions];
+  [TamaraSwitchRepro runIfRequested]; // temporary diagnostic, no-op without -TamaraRepro
+  return result;
 }
 
 - (NSURL *)sourceURLForBridge:(RCTBridge *)bridge

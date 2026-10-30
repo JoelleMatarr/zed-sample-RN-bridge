@@ -20,12 +20,16 @@
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A84366C72F6A918A00863F8D /* CardViewIOSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A84366C62F6A918A00863F8D /* CardViewIOSManager.swift */; };
 		A84366C92F6A92CE00863F8D /* CardViewIOSManager.m in Sources */ = {isa = PBXBuildFile; fileRef = A84366C82F6A92CE00863F8D /* CardViewIOSManager.m */; };
+		A86B102E309491A600C1E38B /* CheckoutComponents in Frameworks */ = {isa = PBXBuildFile; productRef = A86B102D309491A600C1E38B /* CheckoutComponents */; };
+		A86B1030309491A600C1E38B /* CheckoutKlarnaSDK in Frameworks */ = {isa = PBXBuildFile; productRef = A86B102F309491A600C1E38B /* CheckoutKlarnaSDK */; };
+		A86B1032309491A600C1E38B /* CheckoutPaymentMethods in Frameworks */ = {isa = PBXBuildFile; productRef = A86B1031309491A600C1E38B /* CheckoutPaymentMethods */; };
 		AA1FB0012E01AAAA00000001 /* ApplePayModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1FAFFF2E01AAAA00000001 /* ApplePayModule.swift */; };
 		AA1FB0012E01AAAA00000002 /* ApplePayModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AA1FAFFF2E01AAAA00000002 /* ApplePayModuleBridge.m */; };
 		AA1FB0012E01AAAA00000003 /* ApplePayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1FAFFF2E01AAAA00000003 /* ApplePayView.swift */; };
 		AA1FB0012E01AAAA00000004 /* ApplePayViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1FAFFF2E01AAAA00000004 /* ApplePayViewManager.swift */; };
 		AA1FB0012E01AAAA00000005 /* ApplePayViewManagerBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = AA1FAFFF2E01AAAA00000005 /* ApplePayViewManagerBridge.m */; };
 		AA1FB0012E01AAAA00000006 /* CardPayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1FAFFF2E01AAAA00000006 /* CardPayView.swift */; };
+		AB2EB0022F01BBBB00000001 /* TamaraSwitchRepro.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2EB0012F01BBBB00000001 /* TamaraSwitchRepro.swift */; };
 		E220634379F7D94706EF20A4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -70,6 +74,7 @@
 		AA1FAFFF2E01AAAA00000004 /* ApplePayViewManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePayViewManager.swift; sourceTree = "<group>"; };
 		AA1FAFFF2E01AAAA00000005 /* ApplePayViewManagerBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ApplePayViewManagerBridge.m; sourceTree = "<group>"; };
 		AA1FAFFF2E01AAAA00000006 /* CardPayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardPayView.swift; sourceTree = "<group>"; };
+		AB2EB0012F01BBBB00000001 /* TamaraSwitchRepro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TamaraSwitchRepro.swift; sourceTree = "<group>"; };
 		E832CD3D2EB7900300909644 /* DemoFlowApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = DemoFlowApp.entitlements; path = DemoFlowApp/DemoFlowApp.entitlements; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -87,8 +92,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A86B1032309491A600C1E38B /* CheckoutPaymentMethods in Frameworks */,
 				513F058F2D71F78200CBF310 /* CheckoutComponents in Frameworks */,
 				0C80B921A6F3F58F76C31292 /* libPods-DemoFlowApp.a in Frameworks */,
+				A86B1030309491A600C1E38B /* CheckoutKlarnaSDK in Frameworks */,
+				A86B102E309491A600C1E38B /* CheckoutComponents in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +126,7 @@
 				E832CD3D2EB7900300909644 /* DemoFlowApp.entitlements */,
 				AA1FAFFF2E01AAAA00000003 /* ApplePayView.swift */,
 				AA1FAFFF2E01AAAA00000006 /* CardPayView.swift */,
+				AB2EB0012F01BBBB00000001 /* TamaraSwitchRepro.swift */,
 				AA1FAFFF2E01AAAA00000004 /* ApplePayViewManager.swift */,
 				A84366C62F6A918A00863F8D /* CardViewIOSManager.swift */,
 				AA1FAFFF2E01AAAA00000005 /* ApplePayViewManagerBridge.m */,
@@ -233,6 +242,11 @@
 			dependencies = (
 			);
 			name = DemoFlowApp;
+			packageProductDependencies = (
+				A86B102D309491A600C1E38B /* CheckoutComponents */,
+				A86B102F309491A600C1E38B /* CheckoutKlarnaSDK */,
+				A86B1031309491A600C1E38B /* CheckoutPaymentMethods */,
+			);
 			productName = DemoFlowApp;
 			productReference = 13B07F961A680F5B00A75B9A /* DemoFlowApp.app */;
 			productType = "com.apple.product-type.application";
@@ -264,7 +278,7 @@
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
 			packageReferences = (
-				51F7CEAF2D567D7E001B4B38 /* XCRemoteSwiftPackageReference "checkout-ios-components" */,
+				A86B102C309491A600C1E38B /* XCRemoteSwiftPackageReference "checkout-ios-components" */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
@@ -465,6 +479,7 @@
 				AA1FB0012E01AAAA00000002 /* ApplePayModuleBridge.m in Sources */,
 				AA1FB0012E01AAAA00000003 /* ApplePayView.swift in Sources */,
 				AA1FB0012E01AAAA00000006 /* CardPayView.swift in Sources */,
+				AB2EB0022F01BBBB00000001 /* TamaraSwitchRepro.swift in Sources */,
 				AA1FB0012E01AAAA00000004 /* ApplePayViewManager.swift in Sources */,
 				A84366C72F6A918A00863F8D /* CardViewIOSManager.swift in Sources */,
 				AA1FB0012E01AAAA00000005 /* ApplePayViewManagerBridge.m in Sources */,
@@ -786,6 +801,14 @@
 				version = 2.1.0;
 			};
 		};
+		A86B102C309491A600C1E38B /* XCRemoteSwiftPackageReference "checkout-ios-components" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/checkout/checkout-ios-components";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -793,6 +816,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 51F7CEAF2D567D7E001B4B38 /* XCRemoteSwiftPackageReference "checkout-ios-components" */;
 			productName = CheckoutComponents;
+		};
+		A86B102D309491A600C1E38B /* CheckoutComponents */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A86B102C309491A600C1E38B /* XCRemoteSwiftPackageReference "checkout-ios-components" */;
+			productName = CheckoutComponents;
+		};
+		A86B102F309491A600C1E38B /* CheckoutKlarnaSDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A86B102C309491A600C1E38B /* XCRemoteSwiftPackageReference "checkout-ios-components" */;
+			productName = CheckoutKlarnaSDK;
+		};
+		A86B1031309491A600C1E38B /* CheckoutPaymentMethods */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A86B102C309491A600C1E38B /* XCRemoteSwiftPackageReference "checkout-ios-components" */;
+			productName = CheckoutPaymentMethods;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

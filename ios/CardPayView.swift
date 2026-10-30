@@ -3,6 +3,36 @@ import UIKit
 import SwiftUI
 import React
 import CheckoutComponentsSDK
+import CheckoutPaymentMethods
+
+// One CheckoutComponents instance per payment session, shared by every CardPayView
+// mounted for that session. Switching Card <-> Tamara re-creates only the component
+// from this instance (the same setup as the merchant's bridge), not the SDK itself.
+private enum SharedCheckoutComponents {
+    // A Task so that views mounting for the same session at once share one setup.
+    static var instances: [String: Task<CheckoutComponents, Error>] = [:]
+    // The view currently showing a component per session. The SDK callbacks belong to
+    // the shared instance, so they are routed to whichever view is active.
+    private static var activeViews: [String: WeakCardPayView] = [:]
+
+    static func setActive(_ view: CardPayView, for sessionID: String) {
+        activeViews[sessionID] = WeakCardPayView(value: view)
+    }
+
+    static func activeView(for sessionID: String) -> CardPayView? {
+        activeViews[sessionID]?.value
+    }
+
+    // A session is used up once a payment succeeds; drop its instance.
+    static func remove(_ sessionID: String) {
+        instances[sessionID] = nil
+        activeViews[sessionID] = nil
+    }
+}
+
+private struct WeakCardPayView {
+    weak var value: CardPayView?
+}
 
 @objc(CardPayView)
 class CardPayView: UIView, HandleSubmitResponseTarget {
@@ -17,6 +47,8 @@ class CardPayView: UIView, HandleSubmitResponseTarget {
     @objc var paymentSessionID: NSString? { didSet { ApplePayViewRegistry.update(self); maybeInitialize() } }
     @objc var paymentSessionSecret: NSString? { didSet { maybeInitialize() } }
     @objc var publicKey: NSString? { didSet { maybeInitialize() } }
+    // "card" (default) or "tamara". Read once at initialization; JS remounts the
+    // view (via `key`) to switch methods, so each method gets a fresh component.
     @objc var paymentMethod: NSString?
 
     private var hasInitialized = false
@@ -25,7 +57,7 @@ class CardPayView: UIView, HandleSubmitResponseTarget {
     private var boundsObservation: NSKeyValueObservation?
 
     // Kept so the JS "Pay" button can trigger submission programmatically.
-    private var submittableComponent: (any CheckoutComponents.Submittable)?
+    fileprivate var submittableComponent: (any CheckoutComponents.Submittable)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -40,6 +72,26 @@ class CardPayView: UIView, HandleSubmitResponseTarget {
     deinit {
         boundsObservation?.invalidate()
         ApplePayViewRegistry.unregister(self)
+    }
+
+    // When React unmounts us (e.g. switching Card <-> Tamara), fully release the SDK
+    // component and detach its hosting controller from the parent view controller,
+    // so nothing from the previous payment method outlives this view.
+    override func willMove(toSuperview newSuperview: UIView?) {
+        super.willMove(toSuperview: newSuperview)
+        if newSuperview == nil { teardown() }
+    }
+
+    private func teardown() {
+        boundsObservation?.invalidate()
+        boundsObservation = nil
+        if let hostingController {
+            hostingController.willMove(toParent: nil)
+            hostingController.view.removeFromSuperview()
+            hostingController.removeFromParent()
+        }
+        hostingController = nil
+        submittableComponent = nil
     }
 
     private func maybeInitialize() {
@@ -58,51 +110,28 @@ class CardPayView: UIView, HandleSubmitResponseTarget {
         guard !hasInitialized else { return }
 
         do {
-            let session = PaymentSession(id: id, paymentSessionSecret: secret)
+            let checkoutComponents = try await sharedCheckoutComponents(id: id, secret: secret, key: key).value
+            SharedCheckoutComponents.setActive(self, for: id)
 
-            let colorTokens = CheckoutComponents.ColorTokens(
-                action: Color(hex: "#FF6B6B"),
-                background: .white,
-                formBackground: Color(hex: "#F5F5F7"),
-                primary: Color(hex: "#00083D")
-            )
-            let designTokens = CheckoutComponents.DesignTokens(
-                colorTokensMain: colorTokens,
-                borderButtonRadius: .init(radius: 25),
-                borderFormRadius: .init(radius: 8)
-            )
-
-            let callbacks = CheckoutComponents.Callbacks(
-                // Keep the latest submittable component so our external Pay button
-                // always submits the current form state.
-                onChange: { [weak self] component in
-                    self?.submittableComponent = component
-                },
-                onSuccess: { [weak self] _, payId in
-                    self?.submittableComponent = nil
-                    ApplePayModule.shared?.sendEvent(withName: "onFlowPaymentSuccess", body: ["paymentId": payId])
-                },
-                onError: { error in
-                    ApplePayModule.shared?.sendEvent(withName: "onFlowPaymentError", body: ["errorMessage": error.localizedDescription])
-                }
-            )
-
-            let config = try await CheckoutComponents.Configuration(
-                paymentSession: session,
-                publicKey: key,
-                environment: .sandbox,
-                appearance: designTokens,
-                callbacks: callbacks
-            )
-
-            let cardConfigs = CheckoutComponents.CardConfigurations(
-                displayCardHolderName: .bottom
-            )
-
-            let component = try CheckoutComponents(configuration: config).create(
-                .card(showPayButton: showPayButton, paymentButtonAction: .tokenization, cardConfiguration: cardConfigs)
-            )
-            // Card component is submittable; hold onto it for the external Pay button.
+            let component: CheckoutComponents.Actionable
+            if (paymentMethod as String?) == "tamara" {
+                component = try checkoutComponents.create(
+                    CheckoutPaymentOptions.Provider.tamara,
+                    showPayButton: showPayButton
+                )
+            } else {
+                let cardConfigs = CheckoutComponents.CardConfigurations(
+                    displayCardHolderName: .bottom
+                )
+                component = try checkoutComponents.create(
+                    .card(showPayButton: showPayButton, paymentButtonAction: .tokenization, cardConfiguration: cardConfigs)
+                )
+            }
+            guard component.isAvailable else {
+                print("DEBUG: \(paymentMethod ?? "card") is not available for this payment session")
+                return
+            }
+            // Hold onto the component so the external Pay button can submit it.
             self.submittableComponent = component
 
             // We use a clean, root SwiftUI wrapper container with zero forced constraints
@@ -151,9 +180,64 @@ class CardPayView: UIView, HandleSubmitResponseTarget {
                 hasInitialized = true
                 self.setNeedsLayout()
             }
+        } catch let error as CheckoutComponents.Error {
+            print("DEBUG: SDK Error type=\(error.type) code=\(error.errorCode) mobileSessionID=\(error.details.mobileSessionID)")
         } catch {
             print("DEBUG: SDK Error: \(error)")
         }
+    }
+
+    // Returns the session's shared CheckoutComponents, creating it on first use.
+    @MainActor
+    private func sharedCheckoutComponents(id: String, secret: String, key: String) -> Task<CheckoutComponents, Error> {
+        if let existing = SharedCheckoutComponents.instances[id] { return existing }
+
+        let task = Task<CheckoutComponents, Error> { @MainActor in
+            let session = PaymentSession(id: id, paymentSessionSecret: secret)
+
+            let colorTokens = CheckoutComponents.ColorTokens(
+                action: Color(hex: "#FF6B6B"),
+                background: .white,
+                formBackground: Color(hex: "#F5F5F7"),
+                primary: Color(hex: "#00083D")
+            )
+            let designTokens = CheckoutComponents.DesignTokens(
+                colorTokensMain: colorTokens,
+                borderButtonRadius: .init(radius: 25),
+                borderFormRadius: .init(radius: 8)
+            )
+
+            let callbacks = CheckoutComponents.Callbacks(
+                // Keep the latest submittable component so our external Pay button
+                // always submits the current form state.
+                onChange: { component in
+                    SharedCheckoutComponents.activeView(for: id)?.submittableComponent = component
+                },
+                onSuccess: { _, payId in
+                    SharedCheckoutComponents.activeView(for: id)?.submittableComponent = nil
+                    SharedCheckoutComponents.remove(id)
+                    ApplePayModule.shared?.sendEvent(withName: "onFlowPaymentSuccess", body: ["paymentId": payId])
+                },
+                onError: { error in
+                    ApplePayModule.shared?.sendEvent(withName: "onFlowPaymentError", body: ["errorMessage": error.localizedDescription])
+                }
+            )
+
+            let config = try await CheckoutComponents.Configuration(
+                paymentSession: session,
+                publicKey: key,
+                environment: .sandbox,
+                appearance: designTokens,
+                callbacks: callbacks
+            )
+            return CheckoutComponents(configuration: config)
+        }
+        SharedCheckoutComponents.instances[id] = task
+        // Don't cache a failed setup; the next mount retries.
+        Task { @MainActor in
+            if case .failure = await task.result { SharedCheckoutComponents.instances[id] = nil }
+        }
+        return task
     }
 
     // Backup trigger: also re-check on our own layout passes (covers the very first
